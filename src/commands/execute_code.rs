@@ -70,7 +70,11 @@ pub async fn execute_code(ctx: &SlashContext<'_, BotState>) -> DefaultCommandRes
         }
     };
 
-    let out = String::from_utf8_lossy(&code_result);
+    let out = code_result
+        .iter()
+        .map(|b| String::from_utf8_lossy(b))
+        .collect::<Vec<_>>()
+        .join("\n");
     if let Err(e) = edit_response(ctx, format!("```{language}\n{out}\n```")).await {
         tracing::error!("failed to reply to interaction - {e}");
         return Ok(());

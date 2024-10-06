@@ -41,7 +41,7 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
     };
     tracing::info!("matched language: {language:#?}");
 
-    let res = match framework.data.docker.exec(&language, code.code).await {
+    let code_result = match framework.data.docker.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
             if let Err(e) = framework
@@ -58,7 +58,11 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
         }
     };
 
-    let out = String::from_utf8_lossy(&res);
+    let out = code_result
+        .iter()
+        .map(|b| String::from_utf8_lossy(b))
+        .collect::<Vec<_>>()
+        .join("\n");
     let reply_id = Id::<MessageMarker>::from_str(&existing_execution.reply_id).unwrap();
     if let Err(e) = framework
         .http_client()

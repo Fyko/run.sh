@@ -127,7 +127,7 @@ impl Docker {
     }
 
     #[tracing::instrument(level = "debug", skip(self, code))]
-    pub async fn exec(&self, language: &Languages, code: &str) -> Result<Vec<u8>, ExecError> {
+    pub async fn exec(&self, language: &Languages, code: &str) -> Result<Vec<Vec<u8>>, ExecError> {
         let id = rand::thread_rng().gen_range(u32::MIN..u32::MAX);
         let dir = format!("/tmp/eval/{id}");
         let container_name = format!("run.sh_{language}");
@@ -158,21 +158,26 @@ impl Docker {
             .attach_stdout(true)
             .attach_stderr(true)
             .build();
+
         let mut stream = container.exec(&options, &Default::default()).await?;
+        let mut res = vec![];
+        let timeout = tokio::time::sleep(std::time::Duration::from_secs(10));
+        tokio::pin!(timeout);
 
-        tokio::select! {
-            _ = tokio::time::sleep(std::time::Duration::from_secs(30)) => Err(ExecError::Timeout),
-            chunk = stream.next() => {
-                match chunk {
-                    Some(Ok(chunk)) => match chunk {
-                        TtyChunk::StdOut(bytes) | TtyChunk::StdErr(bytes) => return Ok(bytes),
-                        TtyChunk::StdIn(_) => unreachable!(),
+        loop {
+            tokio::select! {
+                _ = &mut timeout => return Err(ExecError::Timeout),
+                chunk = stream.next() => match chunk {
+                    Some(Ok(TtyChunk::StdOut(bytes) | TtyChunk::StdErr(bytes))) => {
+                        res.push(bytes);
                     },
+                    Some(Ok(TtyChunk::StdIn(_))) => unreachable!(),
                     Some(Err(e)) => return Err(ExecError::DockerConnection(e)),
-                    None => return Err(ExecError::Empty),
+                    None => break,
                 }
-
             }
         }
+
+        Ok(res)
     }
 }

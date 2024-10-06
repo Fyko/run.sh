@@ -113,8 +113,13 @@ async fn handle_connection(docker: Arc<Docker>, socket: TcpStream, addr: SocketA
                 let res = docker.exec(&language, code).await;
                 match res {
                     Ok(output) => {
+                        let out = output
+                            .iter()
+                            .map(|b| String::from_utf8_lossy(b))
+                            .collect::<Vec<_>>()
+                            .join("\n");
                         lines
-                            .send(String::from_utf8_lossy(&output))
+                            .send(out)
                             .await
                             .expect("failed to write data to socket");
                     }

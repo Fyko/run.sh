@@ -69,7 +69,11 @@ pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyho
         }
     };
 
-    let out = String::from_utf8_lossy(&code_result);
+    let out = code_result
+        .iter()
+        .map(|b| String::from_utf8_lossy(b))
+        .collect::<Vec<_>>()
+        .join("\n");
     let res = match framework
         .http_client()
         .create_message(message.channel_id)
