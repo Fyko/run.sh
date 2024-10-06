@@ -22,3 +22,4 @@ body:
       description: Are you able to implement this language yourself? If so, there's documentation on how to do so [here](https://github.com/fyko/run.sh/blob/main/languages/README.md).
       options:
         - label: "Yes"
+        - label: "No"
