@@ -1,0 +1,36 @@
+[
+	{
+		"default_member_permissions": null,
+		"description": "",
+		"name": "Execute Code",
+		"options": [],
+		"type": 3,
+		"version": "1",
+		"integration_types": [
+			0,
+			1
+		],
+		"contexts": [
+			0,
+			1,
+			2
+		]
+	},
+	{
+		"default_member_permissions": null,
+		"description": "Lists all available languages",
+		"name": "languages",
+		"options": [],
+		"type": 1,
+		"version": "1",
+		"integration_types": [
+			0,
+			1
+		],
+		"contexts": [
+			0,
+			1,
+			2
+		]
+	}
+]

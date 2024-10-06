@@ -1,0 +1,26 @@
+name: Language Request
+description: Request a new language to be added to run.sh
+title: "request: "
+labels: ["language request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to fill out this language request!
+
+        Double check that the language you're requesting isn't already available in the [list of supported languages](https://github.com/fyko/run.sh/blob/main/languages).
+  - type: textarea
+    id: language
+    attributes:
+      label: Language
+      description: What language would you like to see added?
+      placeholder: e.g. Assembly
+    validations:
+      required: true
+  - type: checkboxes
+    id: can-implement
+    attributes:
+      label: Can you PR?
+      description: Are you able to implement this language yourself? If so, there's documentation on how to do so [here](https://github.com/fyko/run.sh/blob/main/languages/README.md).
+      options:
+        - label: Yes
