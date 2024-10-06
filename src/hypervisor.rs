@@ -49,10 +49,7 @@ impl Docker {
     pub async fn stop(&self) -> docker_api::errors::Result<()> {
         for language in &CONFIG.languages {
             tracing::info!("killing container for {language}");
-            let container = self
-                .client
-                .containers()
-                .get(format!("coderunner_{language}"));
+            let container = self.client.containers().get(format!("run.sh_{language}"));
             let _ = container.kill(None).await;
         }
 
@@ -65,7 +62,7 @@ impl Docker {
         let cwd = cwd.display();
 
         let opts = ImageBuildOpts::builder(format!("{cwd}/languages/{language}"))
-            .tag(format!("coderunner_{language}:latest"))
+            .tag(format!("run.sh_{language}:latest"))
             .build();
 
         let images = self.client.images();
@@ -108,7 +105,7 @@ impl Docker {
         language: &str,
     ) -> Result<docker_api::Container, docker_api::Error> {
         let opts = ContainerCreateOpts::builder()
-            .name(format!("coderunner_{language}"))
+            .name(format!("run.sh_{language}"))
             .auto_remove(true)
             .user("1000:1000")
             .working_dir("/tmp")
@@ -117,7 +114,7 @@ impl Docker {
             .cpus(0.25)
             .memory(128 * 1024 * 1024)
             .memory_swap(128 * 1024 * 1024)
-            .image(format!("coderunner_{language}:latest"))
+            .image(format!("run.sh_{language}:latest"))
             .command(["tail", "-f", "/dev/null"]);
 
         #[cfg(all(target_os = "linux", not(debug_assertions)))]
@@ -132,7 +129,7 @@ impl Docker {
     pub async fn exec(&self, language: &Languages, code: &str) -> Result<Vec<u8>, ExecError> {
         let id = rand::thread_rng().gen_range(u32::MIN..u32::MAX);
         let dir = format!("/tmp/eval/{id}");
-        let container_name = format!("coderunner_{language}");
+        let container_name = format!("run.sh_{language}");
         tracing::debug!("container name: {container_name}");
         let container = self.client.containers().get(&container_name);
 
