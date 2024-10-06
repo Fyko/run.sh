@@ -20,10 +20,13 @@ use twilight_gateway::{
 use twilight_http::Client;
 use vesper::framework::Framework;
 
+static READY: AtomicBool = AtomicBool::new(false);
 static SHUTDOWN: AtomicBool = AtomicBool::new(false);
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    #[cfg(feature = "systemd")]
+    systemd();
     dotenv().ok();
 
     Registry::default()
@@ -75,21 +78,7 @@ async fn main() -> Result<()> {
         tasks.spawn(runner(shard, framework.clone()));
     }
 
-    #[cfg(feature = "systemd")]
-    {
-        use libsystemd::daemon::{self, NotifyState};
-        if libsystemd::daemon::booted() {
-            let sent =
-                daemon::notify(true, &[NotifyState::Ready]).expect("notifying systemd failed");
-            if !sent {
-                tracing::warn!("failed to notify systemd");
-            }
-        }
-        {
-            tracing::warn!("systemd not booted");
-        }
-    }
-
+    READY.store(true, Ordering::Relaxed);
     shutdown_signal().await;
     SHUTDOWN.store(true, Ordering::Relaxed);
     for sender in senders {
@@ -174,4 +163,37 @@ pub async fn shutdown_signal() {
     }
 
     tracing::info!("signal received, starting graceful shutdown");
+}
+
+#[cfg(feature = "systemd")]
+fn systemd() {
+    use libsystemd::daemon::{self, NotifyState};
+    tokio::spawn(async move {
+        if libsystemd::daemon::booted() {
+            tokio::spawn(async move {
+                while !READY.load(Ordering::Relaxed) {
+                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+                }
+
+                let sent =
+                    daemon::notify(false, &[NotifyState::Ready]).expect("notifying systemd failed");
+                if !sent {
+                    tracing::warn!("failed to notify systemd");
+                }
+            });
+
+            if let Some(timeout) = daemon::watchdog_enabled(true) {
+                tracing::info!("watchdog enabled");
+                loop {
+                    daemon::notify(false, &[NotifyState::Watchdog])
+                        .expect("notifying systemd failed");
+                    tokio::time::sleep(timeout / 2).await;
+                }
+            } else {
+                tracing::warn!("watchdog not enabled");
+            }
+        } else {
+            tracing::warn!("systemd not booted");
+        }
+    });
 }
