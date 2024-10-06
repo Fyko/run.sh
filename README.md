@@ -6,7 +6,7 @@
 
 ## Want a new language?
 
-Create a [language request](https://github.com/1computer1/run.sh/issues/new?assignees=&labels=&template=feature_request.yml&title=).
+Create a [language request](https://github.com/Fyko/run.sh/issues/new?assignees=&labels=&template=feature_request.yml&title=).
 
 ## Development
 
