@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use sqlx::SqlitePool;
+use sqlx::PgPool;
 use twilight_cache_inmemory::InMemoryCache;
 
-use crate::hypervisor::Docker;
+use crate::hypervisor::Hypervisor;
 
 #[derive(Clone)]
 pub struct BotState {
     pub cache: Arc<InMemoryCache>,
-    pub docker: Arc<Docker>,
-    pub db: SqlitePool,
+    pub hypervisor: Arc<Hypervisor>,
+    pub db: PgPool,
 }

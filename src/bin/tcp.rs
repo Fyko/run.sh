@@ -5,7 +5,7 @@ use dotenvy::dotenv;
 use futures::{SinkExt, StreamExt};
 use run_sh::{
     config::CONFIG,
-    hypervisor::{languages::Languages, Docker},
+    hypervisor::{languages::Languages, Hypervisor},
 };
 use std::net::SocketAddr;
 use tokio::net::{TcpListener, TcpStream};
@@ -21,8 +21,8 @@ async fn main() -> Result<(), Box<dyn Error>> {
         .with(fmt::layer())
         .init();
 
-    let docker = Arc::new(Docker::new(CONFIG.docker_endpoint.clone()));
-    docker.init().await?;
+    let hypervisor = Arc::new(Hypervisor::new(CONFIG.docker_endpoint.clone()));
+    hypervisor.init().await?;
 
     let listener = TcpListener::bind("127.0.0.1:8080").await.unwrap();
     tracing::info!("tcp listening on 127.0.0.1:8080");
@@ -38,28 +38,28 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // }
     tokio::select! {
         _ = shutdown_signal() => {
-            docker.stop().await?;
+            hypervisor.stop().await?;
         },
-        _ = run_server(docker.clone(), listener) => {},
+        _ = run_server(hypervisor.clone(), listener) => {},
     }
 
     Ok(())
 }
 
-async fn run_server(docker: Arc<Docker>, listener: TcpListener) {
+async fn run_server(hypervisor: Arc<Hypervisor>, listener: TcpListener) {
     loop {
         while let Ok((socket, addr)) = listener.accept().await {
             tokio::spawn({
-                let docker = docker.clone();
+                let hypervisor = hypervisor.clone();
                 async move {
-                    handle_connection(docker, socket, addr).await;
+                    handle_connection(hypervisor, socket, addr).await;
                 }
             });
         }
     }
 }
 
-async fn handle_connection(docker: Arc<Docker>, socket: TcpStream, addr: SocketAddr) {
+async fn handle_connection(hypervisor: Arc<Hypervisor>, socket: TcpStream, addr: SocketAddr) {
     let mut lines = Framed::new(socket, LinesCodec::new());
 
     tracing::info!("new connection from {addr}");
@@ -110,7 +110,7 @@ async fn handle_connection(docker: Arc<Docker>, socket: TcpStream, addr: SocketA
                     .await
                     .expect("failed to write data to socket");
                 // execute code
-                let res = docker.exec(&language, code).await;
+                let res = hypervisor.exec(&language, code).await;
                 match res {
                     Ok(output) => {
                         let out = output

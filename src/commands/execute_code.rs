@@ -1,7 +1,10 @@
 use twilight_model::application::interaction::InteractionData;
 use vesper::prelude::*;
 
-use crate::{hypervisor::languages::Languages, state::BotState};
+use crate::{
+    hypervisor::{format_output, languages::Languages},
+    state::BotState,
+};
 
 use super::{defer_response, edit_response, text_response};
 
@@ -59,7 +62,7 @@ pub async fn execute_code(ctx: &SlashContext<'_, BotState>) -> DefaultCommandRes
 
     defer_response(ctx).await?;
 
-    let code_result = match ctx.data.docker.exec(&language, code.code).await {
+    let code_result = match ctx.data.hypervisor.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
             if let Err(e) = edit_response(ctx, format!("Failed to execute code: {e}")).await {
@@ -70,11 +73,8 @@ pub async fn execute_code(ctx: &SlashContext<'_, BotState>) -> DefaultCommandRes
         }
     };
 
-    let out = code_result
-        .iter()
-        .map(|b| String::from_utf8_lossy(b))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let out = format_output(code_result);
+
     if let Err(e) = edit_response(ctx, format!("```{language}\n{out}\n```")).await {
         tracing::error!("failed to reply to interaction - {e}");
         return Ok(());
@@ -84,7 +84,7 @@ pub async fn execute_code(ctx: &SlashContext<'_, BotState>) -> DefaultCommandRes
     let message_id = message.id.to_string();
     let language = language.to_string();
     sqlx::query!(
-        r#"insert into execution (channel_id, message_id, language, reply_id) values (?1, ?2, ?3, "interaction") returning *;"#,
+        r#"insert into execution (channel_id, message_id, language, reply_id) values ($1, $2, $3, 'interaction') returning *;"#,
         channel_id,
         message_id,
         language,

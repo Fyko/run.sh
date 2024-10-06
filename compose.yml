@@ -1,6 +1,29 @@
 services:
   app:
     build: .
-    environment:
-      RUST_LOG: ${RUST_LOG:-info}
+    env_file: .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
     restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine3.20
+    volumes:
+      - ./db:/var/lib/postgresql
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?database password required}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_DATABASE: ${POSTGRES_DATABASE:-run-sh}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -d $${POSTGRES_DATABASE} -U $${POSTGRES_USER}",
+        ]
+      start_period: 20s
+      interval: 30s
+      retries: 5
+      timeout: 5s

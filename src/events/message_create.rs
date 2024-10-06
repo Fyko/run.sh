@@ -1,6 +1,9 @@
 use twilight_model::gateway::payload::incoming::MessageCreate;
 
-use crate::{hypervisor::languages::Languages, BotFramework};
+use crate::{
+    hypervisor::{format_output, languages::Languages},
+    BotFramework,
+};
 
 pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyhow::Result<()> {
     let message = event.0;
@@ -52,7 +55,7 @@ pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyho
         .create_typing_trigger(message.channel_id)
         .await?;
 
-    let code_result = match framework.data.docker.exec(&language, code.code).await {
+    let code_result = match framework.data.hypervisor.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
             if let Err(e) = framework
@@ -69,11 +72,8 @@ pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyho
         }
     };
 
-    let out = code_result
-        .iter()
-        .map(|b| String::from_utf8_lossy(b))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let out = format_output(code_result);
+
     let res = match framework
         .http_client()
         .create_message(message.channel_id)
@@ -95,7 +95,7 @@ pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyho
     let language = language.to_string();
     let reply_id = res.id.to_string();
     sqlx::query!(
-        "insert into execution (channel_id, message_id, language, reply_id) values (?1, ?2, ?3, ?4) returning *;",
+        "insert into execution (channel_id, message_id, language, reply_id) values ($1, $2, $3, $4) returning *;",
         channel_id,
         message_id,
         language,

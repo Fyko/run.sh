@@ -5,3 +5,5 @@ target
 .gitignore
 .pre-commit-config.yaml
 Dockerfile
+db
+scripts

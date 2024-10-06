@@ -25,11 +25,11 @@ macro_rules! exec_options {
     };
 }
 
-pub struct Docker {
+pub struct Hypervisor {
     client: DockerClient,
 }
 
-impl Docker {
+impl Hypervisor {
     pub fn new(endpoint: String) -> Self {
         let client = DockerClient::new(endpoint).expect("failed to create docker client");
         Self { client }
@@ -57,7 +57,7 @@ impl Docker {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn build_image(&self, language: &str) -> docker_api::errors::Result<()> {
+    pub async fn build_image(&self, language: &Languages) -> docker_api::errors::Result<()> {
         let cwd = env::current_dir()?;
         let cwd = cwd.display();
 
@@ -73,7 +73,7 @@ impl Docker {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn run(&self, language: &str) -> docker_api::errors::Result<()> {
+    pub async fn run(&self, language: &Languages) -> docker_api::errors::Result<()> {
         self.create_container(language).await?;
         self.start_container(language).await?;
 
@@ -81,7 +81,7 @@ impl Docker {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn start_container(&self, language: &str) -> docker_api::errors::Result<()> {
+    pub async fn start_container(&self, language: &Languages) -> docker_api::errors::Result<()> {
         let container_name = format!("run.sh_{language}");
         let container = self.client.containers().get(container_name);
         let _ = container.start().await;
@@ -102,7 +102,7 @@ impl Docker {
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn create_container(
         &self,
-        language: &str,
+        language: &Languages,
     ) -> Result<docker_api::Container, docker_api::Error> {
         let opts = ContainerCreateOpts::builder()
             .name(format!("run.sh_{language}"))
@@ -114,11 +114,9 @@ impl Docker {
             .cpus(0.25)
             .memory(128 * 1024 * 1024)
             .memory_swap(128 * 1024 * 1024)
+            .runtime(CONFIG.docker_runtime.clone())
             .image(format!("run.sh_{language}:latest"))
             .command(["tail", "-f", "/dev/null"]);
-
-        #[cfg(all(target_os = "linux", not(debug_assertions)))]
-        let opts = opts.runtime("runsc");
 
         let opts = opts.build();
 
@@ -179,5 +177,34 @@ impl Docker {
         }
 
         Ok(res)
+    }
+}
+
+/// Formats the output of a code execution for Discord.
+///
+/// - Applies a truncation of 1500 characters if the output is longer than that.
+/// - If the output is empty, returns "No output".
+pub fn format_output(code_result: Vec<Vec<u8>>) -> String {
+    let out = code_result
+        .iter()
+        .map(|b| String::from_utf8_lossy(b))
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let out = if out.len() > 1500 {
+        let trunc = out.len() - 1500;
+        let mut out = out;
+        out.truncate(1500);
+        out.push_str(&format!("...({trunc} more characters)"));
+
+        out
+    } else {
+        out
+    };
+
+    if out.is_empty() {
+        "No output".to_string()
+    } else {
+        out
     }
 }

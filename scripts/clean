@@ -1,0 +1,23 @@
+#!/bin/bash
+
+# Get the list of container names
+containers=$(docker ps --filter name=run.sh_ --format {{.Names}} | tr '\n' ' ')
+
+# Check if any containers were found
+if [ -z "$containers" ]; then
+    echo "No containers matching the filter were found."
+    exit 1
+fi
+
+# Create and execute the docker kill command
+kill_command="docker kill $containers"
+echo "Executing: $kill_command"
+eval $kill_command
+
+# Check the exit status of the docker kill command
+if [ $? -eq 0 ]; then
+    echo "Successfully killed containers."
+else
+    echo "Error occurred while killing containers."
+    exit 1
+fi

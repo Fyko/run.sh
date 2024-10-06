@@ -3,6 +3,8 @@ use once_cell::sync::Lazy;
 use serde::{Deserialize, Serialize};
 use twilight_model::id::{marker::ApplicationMarker, Id};
 
+use crate::hypervisor::languages::Languages;
+
 pub static CONFIG: Lazy<Config> = Lazy::new(|| Config::new().expect("Unable to retrieve config"));
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -38,13 +40,16 @@ pub struct Config {
     pub discord_application_id: Id<ApplicationMarker>,
 
     /// The enabled languages
-    pub languages: Vec<String>, // todo: use the enum
+    pub languages: Vec<Languages>,
 
     // The Docker api endpoint
     pub docker_endpoint: String,
 
     /// The database url
     pub database_url: String,
+
+    /// The docker runtime
+    pub docker_runtime: String,
 }
 
 impl Config {

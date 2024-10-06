@@ -5,12 +5,15 @@ use twilight_model::{
     id::{marker::MessageMarker, Id},
 };
 
-use crate::{hypervisor::languages::Languages, BotFramework};
+use crate::{
+    hypervisor::{format_output, languages::Languages},
+    BotFramework,
+};
 
 pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> anyhow::Result<()> {
     let message_id = message.id.to_string();
     let Some(existing_execution) =
-        sqlx::query!("select * from execution where message_id = ?1", message_id)
+        sqlx::query!("select * from execution where message_id = $1", message_id)
             .fetch_optional(&framework.data.db)
             .await?
     else {
@@ -41,7 +44,7 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
     };
     tracing::info!("matched language: {language:#?}");
 
-    let code_result = match framework.data.docker.exec(&language, code.code).await {
+    let code_result = match framework.data.hypervisor.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
             if let Err(e) = framework
@@ -58,11 +61,8 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
         }
     };
 
-    let out = code_result
-        .iter()
-        .map(|b| String::from_utf8_lossy(b))
-        .collect::<Vec<_>>()
-        .join("\n");
+    let out = format_output(code_result);
+
     let reply_id = Id::<MessageMarker>::from_str(&existing_execution.reply_id).unwrap();
     if let Err(e) = framework
         .http_client()

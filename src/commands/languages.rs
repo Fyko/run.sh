@@ -1,6 +1,6 @@
 use vesper::prelude::*;
 
-use crate::{config::CONFIG, hypervisor::languages::LANGUAGES, state::BotState};
+use crate::{config::CONFIG, hypervisor::languages::Languages, state::BotState};
 
 use super::text_response;
 
@@ -16,13 +16,12 @@ pub async fn languages(ctx: &SlashContext<'_, BotState>) -> DefaultCommandResult
             .collect(),
     );
 
-    let mut disabled = vec![];
-    for language in LANGUAGES {
-        if !CONFIG.languages.contains(&(*language).to_string()) {
-            disabled.push((*language).to_string());
-        }
-    }
-    let disabled = join_vec_with_and(disabled.iter().map(|l| format!("`{l}`")).collect());
+    let disabled = join_vec_with_and(
+        Languages::disabled_languages()
+            .iter()
+            .map(|l| format!("`{l}`"))
+            .collect(),
+    );
 
     let content = indoc::formatdoc! {r#"
 		Enabled languages: {enabled}
