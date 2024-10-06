@@ -49,8 +49,8 @@ twilight-model = "0.15"
 twilight-util = { version = "0.15", features = ["builder"] }
 vesper = "0.13.0"
 
-[profile.release]
-strip = true
-opt-level = "z"
-lto = true
-codegen-units = 1
+# [profile.release]
+# strip = true
+# opt-level = "z"
+# lto = true
+# codegen-units = 1
