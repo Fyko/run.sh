@@ -67,7 +67,6 @@ impl Docker {
 
         let images = self.client.images();
         let mut stream = images.build(&opts);
-
         while (stream.next().await).is_some() {}
 
         Ok(())
@@ -122,6 +121,7 @@ impl Docker {
 
         let opts = opts.build();
 
+        tracing::debug!("creating container");
         self.client.containers().create(&opts).await
     }
 
