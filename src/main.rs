@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     Registry::default()
         .with(
             EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| "sqlx::query=debug,debug=run-sh,info".into()),
+                .unwrap_or_else(|_| "sqlx::query=debug,run_sh=debug,info".into()),
         )
         .with(fmt::layer())
         .init();
