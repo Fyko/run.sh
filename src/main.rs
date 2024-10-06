@@ -75,21 +75,6 @@ async fn main() -> Result<()> {
         tasks.spawn(runner(shard, framework.clone()));
     }
 
-    #[cfg(feature = "systemd")]
-    {
-        use libsystemd::daemon::{self, NotifyState};
-        if libsystemd::daemon::booted() {
-            let sent =
-                daemon::notify(true, &[NotifyState::Ready]).expect("notifying systemd failed");
-            if !sent {
-                tracing::warn!("failed to notify systemd");
-            }
-        }
-        {
-            tracing::warn!("systemd not booted");
-        }
-    }
-
     shutdown_signal().await;
     SHUTDOWN.store(true, Ordering::Relaxed);
     for sender in senders {

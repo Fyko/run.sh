@@ -48,10 +48,7 @@ twilight-http = { version = "0.15", default-features = false, features = [
 twilight-model = "0.15"
 twilight-util = { version = "0.15", features = ["builder"] }
 vesper = "0.13.0"
-libsystemd = { version = "0.7.0", optional = true }
 
-[features]
-systemd = ["dep:libsystemd"]
 # [profile.release]
 # strip = true
 # opt-level = "z"
