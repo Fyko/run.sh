@@ -27,7 +27,7 @@ pub async fn languages(ctx: &SlashContext<'_, BotState>) -> DefaultCommandResult
     let content = indoc::formatdoc! {r#"
 		Enabled languages: {enabled}
 		Disabled languages: {disabled}
-		-# Don't see your language here? Consider making a [Feature Request](<https://github.com/fyko/run.sh/issues/new?&template=language_request.yml>)
+		-# Don't see your language here? Consider making a [Feature Request](<https://github.com/Fyko/run.sh/issues/new?assignees=&labels=language+request&projects=&template=language_request.yml&title=request%3A+>)
 	"#};
 
     text_response(ctx, content, false).await
