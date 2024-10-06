@@ -20,6 +20,6 @@ Create a [language request](https://github.com/Fyko/run.sh/issues/new?assignees=
 
 If you're developing a new language and don't want to run the bot, you can run the tcp server with `cargo run --bin tcp` and connect with `nc localhost 8080`.
 
-The .env file requirements are the same.
+The .env file requirements are the same except DISCORD_TOKEN can be any random string.
 
 [sqlx-cli]: https://github.com/launchbadge/sqlx/tree/main/sqlx-cli
