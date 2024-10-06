@@ -29,32 +29,19 @@ The .env file requirements are the same except DISCORD_TOKEN can be any random s
 You have to [install](https://gvisor.dev/docs/user_guide/docker/) [gVisor](https://github.com/google/gvisor) as a runtime for docker to provide an additional isolation boundary between the containers and the host kernel.
 
 ```sh
+# source https://gvisor.dev/docs/user_guide/install/#install-latest
 (
-    set -e
-    wget https://storage.googleapis.com/gvisor/releases/nightly/latest/runsc
-    wget https://storage.googleapis.com/gvisor/releases/nightly/latest/runsc.sha512
-    sha512sum -c runsc.sha512
-    sudo mv runsc /usr/local/bin
-    sudo chown root:root /usr/local/bin/runsc
-    sudo chmod 0755 /usr/local/bin/runsc
+  set -e
+  ARCH=$(uname -m)
+  URL=https://storage.googleapis.com/gvisor/releases/release/latest/${ARCH}
+  wget ${URL}/runsc ${URL}/runsc.sha512 \
+    ${URL}/containerd-shim-runsc-v1 ${URL}/containerd-shim-runsc-v1.sha512
+  sha512sum -c runsc.sha512 \
+    -c containerd-shim-runsc-v1.sha512
+  rm -f *.sha512
+  chmod a+rx runsc containerd-shim-runsc-v1
+  sudo mv runsc containerd-shim-runsc-v1 /usr/local/bin
+  sudo /usr/local/bin/runsc install
+  sudo systemctl reload docker
 )
 ```
-
-`/etc/docker/daemon.json`:
-
-```json
-{
-  "runtimes": {
-    "runsc": {
-      "path": "/usr/local/bin/runsc",
-      "runtimeArgs": ["--network=none", "--overlay"]
-    },
-    "runsc-kvm": {
-      "path": "/usr/local/bin/runsc",
-      "runtimeArgs": ["--platform=kvm", "--network=none", "--overlay"]
-    }
-  }
-}
-```
-
-You may have to create this file if it does not exist.
