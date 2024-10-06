@@ -63,6 +63,7 @@ define_languages!(
         "cpp",
         ["cpp", "hpp", "cc", "hh", "c++", "h++", "cxx", "hxx"]
     ),
+    (Crystal, "crystal", ["crystal", "cr"]),
     (CSharp, "csharp", ["csharp", "cs"]),
     (Elixir, "elixir", ["elixir", "ex"]),
     (FSharp, "fsharp", ["fsharp", "fs", "fsx", "fsi", "fsscript"]),
@@ -82,5 +83,6 @@ define_languages!(
     (Racket, "racket", ["racket"]),
     (Ruby, "ruby", ["ruby", "rb"]),
     (Rust, "rust", ["rust", "rs"]),
+    (SQL, "sql", ["sql"]),
     (TypeScript, "typescript", ["typescript", "ts"]),
 );
