@@ -38,7 +38,7 @@ pub struct Config {
     pub discord_application_id: Id<ApplicationMarker>,
 
     /// The enabled languages
-    pub languages: Vec<String>,
+    pub languages: Vec<String>, // todo: use the enum
 
     // The Docker api endpoint
     pub docker_endpoint: String,

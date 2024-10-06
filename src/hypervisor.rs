@@ -74,15 +74,16 @@ impl Docker {
 
     #[tracing::instrument(level = "debug", skip(self))]
     pub async fn run(&self, language: &str) -> docker_api::errors::Result<()> {
-        let container = self.create_container(language).await?;
-        self.start_container(container.id().as_ref()).await?;
+        self.create_container(language).await?;
+        self.start_container(language).await?;
 
         Ok(())
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn start_container(&self, container: &str) -> docker_api::errors::Result<()> {
-        let container = self.client.containers().get(container);
+    pub async fn start_container(&self, language: &str) -> docker_api::errors::Result<()> {
+        let container_name = format!("run.sh_{language}");
+        let container = self.client.containers().get(container_name);
         let _ = container.start().await;
 
         tracing::debug!("creating /tmp/eval directory");
