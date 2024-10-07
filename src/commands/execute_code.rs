@@ -65,6 +65,8 @@ pub async fn execute_code(ctx: &SlashContext<'_, BotState>) -> DefaultCommandRes
     let code_result = match ctx.data.hypervisor.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
+            tracing::error!("failed to execute code - {e:#?}");
+
             if let Err(e) = edit_response(ctx, format!("Failed to execute code: {e}")).await {
                 tracing::error!("failed to reply to interaction - {e}");
             }

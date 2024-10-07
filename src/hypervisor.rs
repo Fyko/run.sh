@@ -1,14 +1,16 @@
 use docker_api::{
     conn::TtyChunk,
-    opts::{ContainerCreateOpts, ExecCreateOpts, ImageBuildOpts},
-    Docker as DockerClient,
+    opts::{
+        ContainerCreateOpts, ContainerFilter, ContainerListOpts, ExecCreateOpts, ImageBuildOpts,
+    },
+    Container, Docker as DockerClient,
 };
 use exec_error::ExecError;
 use futures::StreamExt;
 use languages::Languages;
 use rand::Rng;
-use std::env;
 use std::str;
+use std::{env, sync::Arc};
 
 use crate::config::CONFIG;
 
@@ -26,12 +28,13 @@ macro_rules! exec_options {
 }
 
 pub struct Hypervisor {
-    client: DockerClient,
+    client: Arc<DockerClient>,
 }
 
 impl Hypervisor {
     pub fn new(endpoint: String) -> Self {
-        let client = DockerClient::new(endpoint).expect("failed to create docker client");
+        let client = Arc::new(DockerClient::new(endpoint).expect("failed to create docker client"));
+
         Self { client }
     }
 
@@ -39,18 +42,41 @@ impl Hypervisor {
         for language in &CONFIG.languages {
             tracing::info!("building image for {language}");
             self.build_image(language).await?;
-            tracing::info!("running container for {language}");
-            self.run(language).await?;
+            // tracing::info!("running container for {language}");
+            // self.run(language).await?;
         }
 
         Ok(())
     }
 
     pub async fn stop(&self) -> docker_api::errors::Result<()> {
-        for language in &CONFIG.languages {
-            tracing::info!("killing container for {language}");
-            let container = self.client.containers().get(format!("run.sh_{language}"));
-            let _ = container.kill(None).await;
+        let opts = ContainerListOpts::builder()
+            .all(true)
+            .filter([ContainerFilter::Name("run.sh_*".to_string())])
+            .build();
+
+        let containers = self.client.containers().list(&opts).await?;
+        tracing::debug!("killing {} containers", containers.len());
+        for container in containers {
+            let names = container.names.unwrap(); // this is infallible thanks to our names filter
+            let name = names.first().unwrap().to_owned();
+            let name = if let Some(stripped) = name.strip_prefix("/") {
+                stripped.to_owned()
+            } else {
+                name
+            };
+
+            tracing::debug!("killing container {name}");
+            tokio::spawn({
+                let client = self.client.clone();
+                async move {
+                    let container = client.containers().get(name);
+                    container
+                        .kill(None)
+                        .await
+                        .expect("failed to kill container");
+                }
+            });
         }
 
         Ok(())
@@ -73,28 +99,42 @@ impl Hypervisor {
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn run(&self, language: &Languages) -> docker_api::errors::Result<()> {
-        self.create_container(language).await?;
-        self.start_container(language).await?;
+    pub async fn run(
+        &self,
+        language: &Languages,
+        id: u32,
+    ) -> docker_api::errors::Result<Container> {
+        let container = self.create_container(language, id).await?;
+        self.start_container(language, id).await?;
 
-        Ok(())
+        Ok(container)
     }
 
     #[tracing::instrument(level = "debug", skip(self))]
-    pub async fn start_container(&self, language: &Languages) -> docker_api::errors::Result<()> {
-        let container_name = format!("run.sh_{language}");
+    pub async fn start_container(
+        &self,
+        language: &Languages,
+        id: u32,
+    ) -> docker_api::errors::Result<()> {
+        let container_name = format!("run.sh_{language}_{id}");
         let container = self.client.containers().get(container_name);
         let _ = container.start().await;
 
         tracing::debug!("creating /tmp/eval directory");
         let options = exec_options!("mkdir", "-p", "/tmp/eval");
         let mut stream = container.exec(&options, &Default::default()).await?;
-        while (stream.next().await).is_some() {}
+        if let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            tracing::debug!("stdout: {chunk:#?}");
+        }
 
         tracing::debug!("chmoding folder");
         let options = exec_options!("chmod", "771", "/tmp/eval");
         let mut stream = container.exec(&options, &Default::default()).await?;
-        while (stream.next().await).is_some() {}
+        if let Some(chunk) = stream.next().await {
+            let chunk = chunk?;
+            tracing::debug!("stdout: {chunk:#?}");
+        }
 
         Ok(())
     }
@@ -103,9 +143,10 @@ impl Hypervisor {
     pub async fn create_container(
         &self,
         language: &Languages,
+        id: u32,
     ) -> Result<docker_api::Container, docker_api::Error> {
         let opts = ContainerCreateOpts::builder()
-            .name(format!("run.sh_{language}"))
+            .name(format!("run.sh_{language}_{id}"))
             .auto_remove(true)
             .user("1000:1000")
             .working_dir("/tmp")
@@ -128,8 +169,9 @@ impl Hypervisor {
     pub async fn exec(&self, language: &Languages, code: &str) -> Result<Vec<Vec<u8>>, ExecError> {
         let id = rand::thread_rng().gen_range(u32::MIN..u32::MAX);
         let dir = format!("/tmp/eval/{id}");
-        let container_name = format!("run.sh_{language}");
+        let container_name = format!("run.sh_{language}_{id}");
         tracing::debug!("container name: {container_name}");
+        self.run(language, id).await?;
         let container = self.client.containers().get(&container_name);
 
         tracing::debug!("creating unique folder in container");
@@ -170,11 +212,21 @@ impl Hypervisor {
                         res.push(bytes);
                     },
                     Some(Ok(TtyChunk::StdIn(_))) => unreachable!(),
-                    Some(Err(e)) => return Err(ExecError::DockerConnection(e)),
+                    Some(Err(e)) => {
+                        // kill container
+                        tracing::debug!("killing container");
+                        container.kill(None).await?;
+
+                        return Err(ExecError::DockerConnection(e));
+                    },
                     None => break,
                 }
             }
         }
+
+        // kill container
+        tracing::debug!("killing container");
+        container.kill(None).await?;
 
         Ok(res)
     }

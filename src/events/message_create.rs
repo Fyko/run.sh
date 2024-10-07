@@ -58,6 +58,8 @@ pub async fn handle(framework: BotFramework, event: Box<MessageCreate>) -> anyho
     let code_result = match framework.data.hypervisor.exec(&language, code.code).await {
         Ok(res) => res,
         Err(e) => {
+            tracing::error!("failed to execute code - {e:#?}");
+
             if let Err(e) = framework
                 .http_client()
                 .create_message(message.channel_id)
