@@ -12,11 +12,8 @@ use run_sh::{commands, BotFramework};
 use sqlx::postgres::PgPoolOptions;
 use tokio::task::JoinSet;
 use tracing_subscriber::{fmt, prelude::*, EnvFilter, Registry};
-use twilight_cache_inmemory::InMemoryCache;
-use twilight_gateway::Shard;
 use twilight_gateway::{
-    stream::{self},
-    CloseFrame, Config, Event, Intents,
+    create_recommended, CloseFrame, Config, Event, EventTypeFlags, Intents, Shard, StreamExt,
 };
 use twilight_http::Client;
 use vesper::framework::Framework;
@@ -39,7 +36,6 @@ async fn main() -> Result<()> {
         .init();
     tracing::info!(env = CONFIG.environment.to_string(), "starting up");
 
-    let cache = Arc::new(InMemoryCache::new());
     let discord_client = Arc::new(Client::new(CONFIG.discord_token.clone()));
     let hypervisor = Arc::new(Hypervisor::new(CONFIG.docker_endpoint.clone()));
 
@@ -62,11 +58,7 @@ async fn main() -> Result<()> {
 
     tracing::info!("initialized database with {count} executions");
 
-    let state = BotState {
-        cache,
-        hypervisor,
-        db,
-    };
+    let state = BotState { hypervisor, db };
 
     tracing::info!("initializing docker containers");
     state.hypervisor.init().await?;
@@ -82,7 +74,7 @@ async fn main() -> Result<()> {
         CONFIG.discord_token.clone(),
         Intents::GUILDS | Intents::GUILD_MESSAGES | Intents::MESSAGE_CONTENT,
     );
-    let shards = stream::create_recommended(&discord_client, config, |_, builder| builder.build())
+    let shards = create_recommended(&discord_client, config, |_, builder| builder.build())
         .await?
         .collect::<Vec<_>>();
     let mut senders = Vec::with_capacity(shards.len());
@@ -100,57 +92,80 @@ async fn main() -> Result<()> {
         _ = sender.close(CloseFrame::NORMAL);
     }
 
-    while (tasks.join_next().await).is_some() {}
+    tasks.join_all().await;
+
     framework.data.hypervisor.stop().await?;
     framework.data.db.close().await;
 
     Ok(())
 }
 
+#[tracing::instrument(level = "debug", skip_all, fields(shard = shard.id().number()))]
 async fn runner(mut shard: Shard, framework: BotFramework) {
     let shard_id = shard.id().number();
 
-    while let Ok(event) = shard.next_event().await {
-        framework.data.cache.update(&event);
+    while let Some(item) = shard.next_event(EventTypeFlags::all()).await {
+        let event = match item {
+            Ok(Event::GatewayClose(_)) if SHUTDOWN.load(Ordering::Relaxed) => {
+                tracing::info!("shutting down shard {shard_id}");
+                break;
+            }
+            Ok(event) => event,
+            Err(source) => {
+                tracing::warn!(?source, "error receiving event");
 
-        match event {
-            Event::GatewayClose(_) if SHUTDOWN.load(Ordering::Relaxed) => break,
-            Event::ThreadCreate(event) => {
-                match thread_create::handle(framework.clone(), event).await {
-                    Ok(_) => {}
-                    Err(e) => tracing::error!("failed to handle thread create event - {e:#?}"),
-                }
+                continue;
             }
-            Event::InteractionCreate(event) => {
-                match interaction_create::handle(framework.clone(), event).await {
-                    Ok(_) => {}
-                    Err(e) => tracing::error!("failed to handle interaction create event - {e:#?}"),
-                }
-            }
-
-            Event::MessageCreate(event) => {
-                match message_create::handle(framework.clone(), event).await {
-                    Ok(_) => {}
-                    Err(e) => tracing::error!("failed to handle message create event - {e:#?}"),
-                }
-            }
-
-            Event::MessageUpdate(event) => {
-                match message_update::handle(framework.clone(), event).await {
-                    Ok(_) => {}
-                    Err(e) => tracing::error!("failed to handle message update event - {e:#?}"),
-                }
-            }
-            Event::Ready(ready) => {
-                let name = ready.user.name;
-                tracing::info!("shard {shard_id} connected; {name} ready!");
-            }
-            Event::GatewayReconnect => tracing::info! {
-                target: "gateway_reconnect",
-                "shard {shard_id} gateway reconnecting"
-            },
-            _ => {}
         };
+
+        tokio::spawn({
+            let framework = framework.clone();
+            async move {
+                match event {
+                    Event::ThreadCreate(event) => {
+                        match thread_create::handle(framework.clone(), event).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("failed to handle thread create event - {e:#?}")
+                            }
+                        }
+                    }
+                    Event::InteractionCreate(event) => {
+                        match interaction_create::handle(framework.clone(), event).await {
+                            Ok(_) => {}
+                            Err(e) => tracing::error!(
+                                "failed to handle interaction create event - {e:#?}"
+                            ),
+                        }
+                    }
+                    Event::MessageCreate(event) => {
+                        match message_create::handle(framework.clone(), event).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("failed to handle message create event - {e:#?}")
+                            }
+                        }
+                    }
+                    Event::MessageUpdate(event) => {
+                        match message_update::handle(framework.clone(), event).await {
+                            Ok(_) => {}
+                            Err(e) => {
+                                tracing::error!("failed to handle message update event - {e:#?}")
+                            }
+                        }
+                    }
+                    Event::Ready(ready) => {
+                        let name = ready.user.name;
+                        tracing::info!("shard {shard_id} connected; {name} ready!");
+                    }
+                    Event::GatewayReconnect => tracing::info! {
+                        target: "gateway_reconnect",
+                        "shard {shard_id} gateway reconnecting"
+                    },
+                    _ => {}
+                };
+            }
+        });
     }
 }
 

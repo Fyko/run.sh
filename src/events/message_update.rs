@@ -34,7 +34,7 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
             .content(&format!(
                 "Unsupported language `{language}`",
                 language = code.language
-            ))?
+            ))
             .await
         {
             tracing::error!("failed to reply to message - {e}");
@@ -51,7 +51,7 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
                 .http_client()
                 .create_message(message.channel_id)
                 .reply(message.id)
-                .content(&format!("Failed to execute code: {e}"))?
+                .content(&format!("Failed to execute code: {e}"))
                 .await
             {
                 tracing::error!("failed to reply to message - {e}");
@@ -69,7 +69,7 @@ pub async fn handle(framework: BotFramework, message: Box<MessageUpdate>) -> any
         .update_message(message.channel_id, reply_id)
         .content(Some(&format!(
             "```{language}\n{out}\n```\n-# ℹ️ Edit your message and the output will update"
-        )))?
+        )))
         .await
     {
         tracing::error!("failed to edit message - {e}");

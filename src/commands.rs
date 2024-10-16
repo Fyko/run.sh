@@ -59,7 +59,6 @@ pub async fn edit_response(ctx: &SlashContext<'_, BotState>, text: String) -> De
     ctx.interaction_client
         .update_response(&ctx.interaction.token)
         .content(Some(&text))
-        .unwrap()
         .await?;
 
     Ok(())
